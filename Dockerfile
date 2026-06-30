@@ -1,32 +1,33 @@
 # syntax=docker/dockerfile:1
 
-# ---------- 1. deps: install once, cached as its own layer ----------
-FROM node:22-alpine AS deps
+# ---------- Base Image: Configures Corepack and pnpm ----------
+FROM node:22-alpine AS base
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
+
+# ---------- 1. deps: install once, cached as its own layer ----------
+FROM base AS deps
+COPY package.json pnpm-lock.yaml ./
+# Uses BuildKit cache mount to leverage the pnpm store across builds
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
 # ---------- 2. builder: compile the Next.js app ----------
-FROM node:22-alpine AS builder
-WORKDIR /app
+FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# DATABASE_URL isn't needed at build time (mysql2's pool connects lazily),
-# but Next.js still wants the env vars it knows about to be defined.
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+RUN pnpm run build
 
 # ---------- 3. runner: the actual production image ----------
-FROM node:22-alpine AS runner
-WORKDIR /app
+FROM base AS runner
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
 
-# Full node_modules (not just a trimmed "standalone" copy) so that
-# `npm run db:push` / `npm run db:seed` (which run db/*.ts directly via
-# tsx) work from this same image, alongside `npm run start` for serving.
+# Copy full dependencies + source code for db:push / db:seed to work seamlessly
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
@@ -40,4 +41,4 @@ RUN mkdir -p storage/uploads && chown -R nextjs:nodejs /app
 USER nextjs
 EXPOSE 3000
 
-CMD ["npm", "run", "start"]
+CMD ["pnpm", "run", "start"]
