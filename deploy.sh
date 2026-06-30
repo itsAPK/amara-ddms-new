@@ -13,7 +13,10 @@ echo "Restarting app with the new image..."
 docker compose -f docker-compose.prod.yml up -d
 
 echo "Applying any new database tables (safe to run every time)..."
-docker compose -f docker-compose.prod.yml exec -T app npm run db:push
+docker compose -f docker-compose.prod.yml exec -T app npm run db:push 
+
+echo "Seeding default data..."
+docker compose -f docker-compose.prod.yml exec -T app npm run db:seed
 
 echo "Done. Current containers:"
 docker compose -f docker-compose.prod.yml ps
