@@ -1,0 +1,15 @@
+node_modules
+.next
+.git
+.env
+.env.local
+.env*.local
+.env.docker.example
+npm-debug.log*
+storage/uploads/*
+!storage/uploads/.gitkeep
+README.md
+*.md
+.DS_Store
+Dockerfile
+docker-compose.yml
